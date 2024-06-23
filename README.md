@@ -8,3 +8,6 @@ just run `make` if you have it
 or run `gradle run`
 
 remember to change the `messages.properties` path in resources `application.properties` before running
+
+# How to insert new lines?
+just add your new lines in `add.txt` in original format, program will convert that into unicode code points and add them in(of course, it will sort the file later)
