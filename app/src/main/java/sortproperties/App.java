@@ -3,123 +3,36 @@
  */
 package sortproperties;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import sortproperties.service.PropertyService;
+import sortproperties.service.impl.PropertyAddNewLinesService;
+import sortproperties.service.impl.PropertySortingService;
+
 public class App {
 
-    private static String sortProperties(Path path) throws IOException {
-        List<String> lines = Files.readAllLines(path);
-
-        Map<String, String> map = new HashMap<>();
-        for (String line : lines) {
-            String[] arr = line.split("=", 2);
-            if (arr.length >= 2 && !map.containsKey(arr[0]))
-                map.put(arr[0], arr[1]);
-        }
-
-        List<String> keys = map.entrySet().stream().map(Map.Entry<String, String>::getKey).collect(Collectors.toList());
-        keys.sort(Comparable::compareTo);
-
-        StringBuilder sb = new StringBuilder();
-        for (String key : keys) {
-            sb.append(key).append("=").append(map.get(key)).append("\n");
-        }
-
-        List<String> sorted = Arrays.stream(sb.toString().split("\n")).collect(Collectors.toList());
-
-        // put in original commented lines
-        for (int i = 0; i < lines.size(); i++) {
-            String line = lines.get(i);
-            if (!sorted.contains(line)) {
-                sorted.add(i, line);
-            }
-        }
-
-        String result = String.join("\n", sorted);
-        return result;
-
-    }
-
-    private static String convertLineToUnicodeCodePoints(String line) {
-        String[] arr = line.split("=");
-        StringBuilder sb = new StringBuilder();
-        sb.append(arr[0]).append("=");
-        char[] chars = arr[1].toCharArray();
-        for (char c : chars) {
-            sb.append("\\u").append(Integer.toHexString(c | 0x10000).toUpperCase().substring(1));
-        }
-
-        return sb.toString();
-    }
-
-    private static List<String> readFromAddNew() throws IOException {
-        List<String> content = new ArrayList<>();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(App.class.getClassLoader().getResourceAsStream("add.txt")))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                content.add(line);
-            }
-        }
-        return content;
-    }
-
-    private static List<String> convertToUnicodeCodePoints(List<String> inputList) {
-        return inputList.stream().map(App::convertLineToUnicodeCodePoints).collect(Collectors.toList());
-    }
-
-    private static void addNewLinesToMessageProperties(List<String> newLines, List<Path> allMessagesPath) {
-        
-    }
-
     public static void main(String[] args) throws IOException {
-        List<String> addNew = readFromAddNew();
+        List<PropertyService> propertyServices = new ArrayList<>();
+        // add new lines in first
+        propertyServices.add(new PropertyAddNewLinesService());
+        // then sort
+        propertyServices.add(new PropertySortingService());
 
         try (InputStream is = App.class.getClassLoader().getResourceAsStream("application.properties")) {
             Properties prop = new Properties();
             prop.load(is);
 
-            List<String> newLinesToAdd = !addNew.isEmpty() ? convertToUnicodeCodePoints(addNew) : Collections.emptyList();
-
             Path path = Paths.get(prop.getProperty("messages.path"));
             List<Path> allMessages = Files.list(path).filter(p -> p.toString().contains("messages")).collect(Collectors.toList());
-            allMessages.forEach(messagesPath -> {
-                try {
-                    // add in new lines
-                    List<String> originalFile = Files.readAllLines(messagesPath);
-                    originalFile.addAll(newLinesToAdd);
-                    try (PrintWriter pw = new PrintWriter(new FileWriter(messagesPath.toString()))) {
-                        pw.print(String.join("\n", originalFile));
-                        pw.flush();
-                    }
-
-                    String sorted = sortProperties(messagesPath);
-                    try (PrintWriter pw = new PrintWriter(new FileWriter(messagesPath.toString()))) {
-                        pw.print(sorted);
-                        pw.flush();
-                    }
-                }
-                catch (IOException e) {
-                    e.printStackTrace();
-                }
-            });
+            allMessages.forEach(messagesPath -> propertyServices.forEach(p -> p.execute(messagesPath)));
             System.out.println("done!");
         }
     }
